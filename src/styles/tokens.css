@@ -1,0 +1,259 @@
+/*
+ * tokens.css — sports-blog identity: "The Chalkboard" (2026-08-12).
+ *
+ * Grounded in the sport's own world: the floodlit-night pitch and the coach's
+ * tactics board. Deep green-black slate surface (a chalkboard under floodlights),
+ * warm chalk-white ink, chalk-drawn pitch lines as hairlines, and ONE hot signal
+ * — sodium-lamp amber (the colour of stadium floodlights and touchline paint).
+ *
+ * Deliberately NOT the sister sites' looks and NOT an AI default:
+ *   - not cream + serif + terracotta
+ *   - not near-black + acid-green (the tired "sporty neon" cliche)
+ *   - not broadsheet hairline columns
+ * Anton (condensed jersey/scoreboard display) + Manrope body + Space Mono stats.
+ *
+ * Theme modes:
+ *   :root                              -> dark board (default identity)
+ *   [data-theme="dark"]                -> board, always
+ *   @media (light):root:not([dark])    -> chalk-on-paper day mode
+ *   [data-theme="light"]               -> day mode, always
+ *   [data-theme="sepia"]               -> warm paper variant
+ *   [data-theme="hc"]                  -> pure black/white high contrast
+ *
+ * Every --color-* alias is preserved so chrome/legal/Footer compile unchanged.
+ */
+:root {
+  color-scheme: dark;
+
+  /* -- The Chalkboard — floodlit-night pitch -----------------------------
+     Deep green-black board + warm chalk ink + sodium-amber floodlight signal. */
+  --brand: #ffb43d; /* sodium-lamp amber — links, active, primary signal */
+  --brand-soft: #2a2113; /* deep amber tint — hover, chips (dark) */
+  --success: #4ade80; /* pitch green (kept off the accent line) */
+  --danger-color: #f2603c; /* red card */
+
+  --pitch: #0c1a15; /* floodlit-night board slate (page bg) */
+  --pitch-2: #12241c; /* elevated panel / surface */
+  --paper: var(--pitch);
+  --paper-2: var(--pitch-2);
+  --surface: var(--pitch-2);
+  --ink: #f2f0e6; /* warm chalk-white */
+  --ink-mute: #93a89b; /* faded chalk / secondary */
+  --rule: #234437; /* chalk pitch line — green-tinted hairline */
+  --rule-strong: #315a49; /* heavier touchline rule */
+
+  /* canonical accent — sodium amber. Everything routes through --accent. */
+  --accent: var(--brand);
+  --accent-soft: var(--brand-soft);
+  --cobalt: var(--accent);
+  --brand-tint: var(--brand-soft);
+  --sage: var(--success);
+  --vermilion: var(--danger-color);
+  --highlighter: var(--brand);
+
+  /* content-vertical marker colours — kit accents. Thin rules / kicker dots
+     only, never the page accent. Tactics · Fitness · Analysis · Culture. */
+  --v-dev: #ffb43d; /* Tactics — amber */
+  --v-finance: #4ade80; /* Fitness — pitch green */
+  --v-culture: #5ec8dc; /* Analysis — floodlight cyan */
+  --v-health: #f472b6; /* Culture — pink kit */
+  --v-personal: #93a89b;
+
+  /* semantic passthroughs */
+  --color-bg: var(--paper);
+  --color-fg: var(--ink);
+  --color-accent: var(--brand);
+  --color-accent-fg: #0c1a15;
+  --color-sage: var(--success);
+  --color-muted: var(--ink-mute);
+  --color-border: var(--rule);
+  --color-bg-soft: var(--paper-2);
+  --color-bg-muted: var(--paper-2);
+  --color-prose: var(--ink);
+  --color-fg-muted: var(--ink-mute);
+  --color-fg-soft: var(--ink-mute);
+
+  /* color alias layer (chrome components read these) */
+  --color-brand-indigo: var(--brand);
+  --color-brand-indigo-soft: var(--brand-soft);
+  --color-brand-success: var(--success);
+  --color-brand-danger: var(--danger-color);
+  --color-neutral-0: #0c1a15;
+  --color-neutral-50: #12241c;
+  --color-neutral-100: #172c22;
+  --color-neutral-200: #234437;
+  --color-neutral-300: #315a49;
+  --color-neutral-500: #93a89b;
+  --color-neutral-700: #c3d2c8;
+  --color-neutral-900: #f2f0e6;
+  --color-neutral-1000: #ffffff;
+  --color-paper: var(--paper);
+  --color-paper-2: var(--paper-2);
+  --color-ink: var(--ink);
+  --color-ink-mute: var(--ink-mute);
+  --color-rule: var(--rule);
+
+  /* -- type -----------------------------------------------------------
+     Font families declared ONCE in global.css @theme. Not duplicated here. */
+
+  --text-2xs: 10px;
+  --text-xs: 11px;
+  --text-sm: 13px;
+  --text-base: 15px;
+  --text-md: 17px;
+  --text-lg: 20px;
+  --text-xl: 24px;
+  --text-2xl: 32px;
+  --text-3xl: 48px;
+
+  /* spacing — 8 steps */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --space-12: 48px;
+  --space-16: 64px;
+
+  /* motion — 3 durations + 3 easings */
+  --dur-fast: 120ms;
+  --dur-base: 200ms;
+  --dur-slow: 360ms;
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-in: cubic-bezier(0.7, 0, 0.84, 0);
+  --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
+
+  /* breakpoints */
+  --bp-sm: 480px;
+  --bp-md: 768px;
+  --bp-lg: 1024px;
+  --bp-xl: 1440px;
+
+  /* radii + containers — soft-cornered like a whiteboard, not zero-radius */
+  --radius-card: 10px;
+  --radius-button: 8px;
+  --container-page: 1100px;
+}
+
+/* -- DAY MODE — chalk-on-paper, via system light unless forced dark ---- */
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme='dark']) {
+    color-scheme: light;
+    --brand: #c9560f; /* deeper touchline amber for light contrast */
+    --brand-soft: #f7ecd9;
+    --pitch: #f3f1e7; /* chalk paper */
+    --pitch-2: #e9e6d6;
+    --ink: #17251d;
+    --ink-mute: #5c6b60;
+    --rule: #cfd4c2;
+    --rule-strong: #adb69f;
+    --v-dev: #c9560f;
+    --v-finance: #1f9d55;
+    --v-culture: #1f7f97;
+    --v-health: #b8347f;
+    --v-personal: #5c6b60;
+    --color-accent-fg: #f3f1e7;
+    --color-neutral-50: #e9e6d6;
+    --color-neutral-100: #dfdccb;
+    --color-neutral-200: #cfd4c2;
+    --color-neutral-500: #5c6b60;
+    --color-neutral-700: #33403a;
+    --color-neutral-900: #17251d;
+  }
+}
+
+/* -- DAY MODE — explicit user override -------------------------------- */
+:root[data-theme='light'] {
+  color-scheme: light;
+  --brand: #c9560f;
+  --brand-soft: #f7ecd9;
+  --pitch: #f3f1e7;
+  --pitch-2: #e9e6d6;
+  --ink: #17251d;
+  --ink-mute: #5c6b60;
+  --rule: #cfd4c2;
+  --rule-strong: #adb69f;
+  --v-dev: #c9560f;
+  --v-finance: #1f9d55;
+  --v-culture: #1f7f97;
+  --v-health: #b8347f;
+  --v-personal: #5c6b60;
+  --color-accent-fg: #f3f1e7;
+  --color-neutral-50: #e9e6d6;
+  --color-neutral-100: #dfdccb;
+  --color-neutral-200: #cfd4c2;
+  --color-neutral-500: #5c6b60;
+  --color-neutral-700: #33403a;
+  --color-neutral-900: #17251d;
+}
+
+/* -- DARK BOARD — explicit user override, wins over system ------------- */
+:root[data-theme='dark'] {
+  color-scheme: dark;
+  --brand: #ffb43d;
+  --brand-soft: #2a2113;
+  --pitch: #0c1a15;
+  --pitch-2: #12241c;
+  --ink: #f2f0e6;
+  --ink-mute: #93a89b;
+  --rule: #234437;
+  --rule-strong: #315a49;
+  --v-dev: #ffb43d;
+  --v-finance: #4ade80;
+  --v-culture: #5ec8dc;
+  --v-health: #f472b6;
+  --v-personal: #93a89b;
+  --color-accent-fg: #0c1a15;
+  --color-neutral-50: #12241c;
+  --color-neutral-100: #172c22;
+  --color-neutral-200: #234437;
+  --color-neutral-500: #93a89b;
+  --color-neutral-700: #c3d2c8;
+  --color-neutral-900: #f2f0e6;
+}
+
+/* -- SEPIA — warm paper, deep amber accent ---------------------------- */
+:root[data-theme='sepia'] {
+  color-scheme: light;
+  --brand: #b5560f;
+  --brand-soft: #f6e5da;
+  --pitch: #f6f0e3;
+  --pitch-2: #efe7d5;
+  --paper: var(--pitch);
+  --paper-2: var(--pitch-2);
+  --ink: #34302a;
+  --ink-mute: #7a7264;
+  --rule: #e0d6c2;
+  --color-accent-fg: #f6f0e3;
+  --color-fg-soft: color-mix(in oklab, var(--ink) 55%, var(--paper));
+  --color-neutral-50: #f6f0e3;
+  --color-neutral-100: #efe7d5;
+  --color-neutral-200: #e0d6c2;
+  --color-neutral-500: #7a7264;
+  --color-neutral-700: #5a5242;
+  --color-neutral-900: #34302a;
+}
+
+/* -- HIGH-CONTRAST — pure black/white, hard borders ------------------- */
+:root[data-theme='hc'] {
+  color-scheme: light;
+  --brand: #a8420a;
+  --brand-soft: #ffe3db;
+  --pitch: #ffffff;
+  --pitch-2: #ffffff;
+  --paper: #ffffff;
+  --paper-2: #ffffff;
+  --ink: #000000;
+  --ink-mute: #2a2a35;
+  --rule: #000000;
+  --rule-strong: #000000;
+  --color-accent-fg: #ffffff;
+  --color-fg-soft: #2a2a35;
+  --color-neutral-50: #ffffff;
+  --color-neutral-100: #ffffff;
+  --color-neutral-200: #000000;
+  --color-neutral-500: #2a2a35;
+  --color-neutral-700: #000000;
+  --color-neutral-900: #000000;
+}
