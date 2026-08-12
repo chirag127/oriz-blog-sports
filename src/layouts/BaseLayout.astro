@@ -35,7 +35,7 @@ interface Props {
 }
 
 const {
-  title = 'oriz / sports',
+  title = 'The Chalkboard — matchday feed',
   description = 'The Chalkboard — scorecards, tactics, and training, the game broken down for fans, by Chirag Singhal.',
   canonical = `https://sports-blog.oriz.in${Astro.url.pathname}`,
   noindex = false,
@@ -70,7 +70,7 @@ const visibleBottomBarActions = hideSidebar
     <meta property="og:description" content={description} />
     <meta property="og:url" content={canonical} />
     <meta property="og:type" content={type} />
-    <meta property="og:site_name" content="oriz / blog" />
+    <meta property="og:site_name" content="The Chalkboard" />
     {ogImage && <meta property="og:image" content={ogImage} />}
     {type === 'article' && pubDate && (
       <meta property="article:published_time" content={pubDate.toISOString()} />

@@ -3,112 +3,279 @@ import HeaderControls from '~/components/HeaderControls.tsx'
 import MultiSearch from '~/components/MultiSearch.tsx'
 import StatusBanner from '~/components/StatusBanner.astro'
 /*
- * Header — editorial masthead bar ("Signal Press").
+ * Header — SCOREBOARD / BROADCAST ribbon (not the sibling masthead bar).
  *
- *   ┌─────────────────────────────────────────────────────────────────┐
- *   │  oriz/blog        LATEST · SERIES · TAGS · ABOUT    ⌘K rss ··· │
- *   └─────────────────────────────────────────────────────────────────┘
+ *   ┌──────────────────────────────────────────────────────────────────────┐
+ *   │ ● LIVE  THE CHALKBOARD▪▪ · matchday feed        ⌘K   controls         │  ← scoreboard row
+ *   ├──────────────────────────────────────────────────────────────────────┤
+ *   │ ‹ TICKER › LATEST HEADLINE  ·  NEXT HEADLINE  ·  … (auto-scroll)       │  ← broadcast ticker
+ *   └──────────────────────────────────────────────────────────────────────┘
  *
- * Left: serif wordmark. Center: mono uppercase nav with orange underline.
- * Right: search (⌘K), rss, ··· overflow. 64px, sticky, paper blur.
+ * Row 1: a floodlit scoreboard bar — pulsing LIVE bug, condensed channel
+ * wordmark, matchday label, then search + controls flush right.
+ * Row 2: a marquee ticker of the latest post titles (the live-ticker vibe).
+ * Channel-guide nav (LIVE / FIXTURES / SEASONS / DESK) lives on its own
+ * segmented rail below — a broadcast "channel guide", never a centered
+ * magazine nav.
  */
-import Wordmark from '~/components/Wordmark.astro'
+import { getPublishedPosts } from '~/lib/blog'
+
+const posts = await getPublishedPosts()
+const ticker = posts.slice(0, 8).map((p) => ({ title: p.data.title, href: `/blog/${p.id}` }))
+const now = new Date()
+const clock = now.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' }).toUpperCase()
+
+const path = Astro.url.pathname
+const nav = [
+  { label: 'Live', href: '/', match: (p: string) => p === '/' },
+  { label: 'Fixtures', href: '/blog/', match: (p: string) => p.startsWith('/blog') || p.startsWith('/archive') },
+  { label: 'Seasons', href: '/series/', match: (p: string) => p.startsWith('/series') },
+  { label: 'Desks', href: '/categories/', match: (p: string) => p.startsWith('/categories') || p.startsWith('/tags') },
+  { label: 'Booth', href: '/about/', match: (p: string) => p.startsWith('/about') },
+]
 ---
 
 <StatusBanner />
-<header class="site-header" transition:persist="site-header">
-  <div class="container-page header-inner">
-    <div class="brand">
-      <Wordmark subtitle="blog" size={21} href="/" />
-    </div>
-    <nav class="header-nav" aria-label="Primary">
-      <a href="/" aria-current={Astro.url.pathname === '/' ? 'page' : undefined}>Latest</a>
-      <a href="/series/" aria-current={Astro.url.pathname.startsWith('/series') ? 'page' : undefined}>Series</a>
-      <a href="/tags/" aria-current={Astro.url.pathname.startsWith('/tags') ? 'page' : undefined}>Tags</a>
-      <a href="/about/" aria-current={Astro.url.pathname.startsWith('/about') ? 'page' : undefined}>About</a>
-    </nav>
-    <div class="header-multisearch">
-      <MultiSearch client:idle />
-    </div>
-    <div class="header-controls-mount">
-      <HeaderControls client:idle />
+<header class="scorebar" transition:persist="scorebar">
+  {/* ── Row 1 — the scoreboard ── */}
+  <div class="scorebar-row scorebar-main">
+    <div class="scorebar-inner">
+      <a class="channel" href="/" aria-label="The Chalkboard — home">
+        <span class="live" aria-hidden="true"><span class="live-dot"></span>LIVE</span>
+        <span class="channel-mark">
+          THE&nbsp;CHALK<span class="channel-z">B<svg class="channel-strike" viewBox="0 0 100 40" aria-hidden="true" preserveAspectRatio="none" focusable="false"><path d="M4 30 L96 12 L84 4" /></svg></span>OARD
+        </span>
+      </a>
+      <span class="matchday mono">
+        <span class="matchday-clock">{clock}</span>
+        <span class="matchday-sep" aria-hidden="true">▪</span>
+        <span class="matchday-label">MATCHDAY FEED</span>
+      </span>
+      <div class="scorebar-search"><MultiSearch client:idle /></div>
+      <div class="scorebar-controls"><HeaderControls client:idle /></div>
     </div>
   </div>
+
+  {/* ── Row 2 — the broadcast ticker ── */}
+  {ticker.length > 0 && (
+    <div class="scorebar-row scorebar-ticker" aria-label="Latest headlines">
+      <span class="ticker-tag mono" aria-hidden="true">TICKER</span>
+      <div class="ticker-viewport">
+        <div class="ticker-track">
+          {[0, 1].map((dup) => (
+            <span class="ticker-run" aria-hidden={dup === 1 ? 'true' : undefined}>
+              {ticker.map((t) => (
+                <a class="ticker-item" href={t.href}>
+                  <span class="ticker-bullet" aria-hidden="true">◦</span>{t.title}
+                </a>
+              ))}
+            </span>
+          ))}
+        </div>
+      </div>
+    </div>
+  )}
+
+  {/* ── Channel-guide nav rail ── */}
+  <nav class="guide" aria-label="Primary">
+    <div class="guide-inner">
+      {nav.map((n) => (
+        <a class="guide-tab" href={n.href} aria-current={n.match(path) ? 'page' : undefined}>{n.label}</a>
+      ))}
+    </div>
+  </nav>
 </header>
 
 <style>
-  .site-header {
+  .scorebar {
     position: sticky;
     top: 0;
     z-index: 50;
-    background: color-mix(in oklab, var(--paper) 90%, transparent);
-    backdrop-filter: saturate(180%) blur(10px);
-    -webkit-backdrop-filter: saturate(180%) blur(10px);
-    border-bottom: 1px solid var(--rule);
+    background: var(--pitch);
+    border-bottom: 2px solid var(--accent);
   }
-  .header-inner {
-    height: 64px;
+
+  /* ── Row 1 — scoreboard ─────────────────────────────────────────────── */
+  .scorebar-main {
+    background:
+      linear-gradient(180deg, color-mix(in oklab, var(--accent) 6%, transparent), transparent),
+      var(--pitch);
+    border-bottom: 1px solid var(--rule-strong);
+  }
+  .scorebar-inner {
+    max-width: var(--container-page, 1100px);
+    margin-inline: auto;
+    padding-inline: clamp(1rem, 4vw, 2rem);
+    height: 58px;
     display: flex;
     align-items: center;
-    gap: 1.5rem;
+    gap: 1rem;
   }
-  .brand {
-    flex: 0 0 auto;
+  .channel {
     display: inline-flex;
     align-items: center;
-  }
-  .header-nav {
-    display: none;
-    gap: 1.5rem;
-    font-family: var(--font-utility, var(--font-mono));
-    font-size: 12px;
-    letter-spacing: 0.1em;
-    text-transform: uppercase;
-    color: var(--color-muted);
-  }
-  .header-nav a {
-    position: relative;
-    padding-block: 0.375rem;
-    color: var(--color-muted);
+    gap: 0.75rem;
     text-decoration: none;
-    transition: color var(--dur-fast, 120ms) ease;
+    color: var(--ink);
+    flex: 0 0 auto;
   }
-  .header-nav a:hover {
-    color: var(--color-accent);
+  .live {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    font-family: var(--font-mono);
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.16em;
+    color: var(--accent);
+    padding: 0.2rem 0.4rem;
+    border: 1px solid color-mix(in oklab, var(--accent) 45%, transparent);
+    border-radius: 3px;
   }
-  .header-nav a::after {
-    content: '';
+  .live-dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: var(--accent);
+    box-shadow: 0 0 0 0 color-mix(in oklab, var(--accent) 70%, transparent);
+  }
+  @media (prefers-reduced-motion: no-preference) {
+    .live-dot { animation: live-pulse 1.8s var(--ease-out) infinite; }
+  }
+  @keyframes live-pulse {
+    0% { box-shadow: 0 0 0 0 color-mix(in oklab, var(--accent) 65%, transparent); }
+    70% { box-shadow: 0 0 0 7px transparent; }
+    100% { box-shadow: 0 0 0 0 transparent; }
+  }
+  .channel-mark {
+    font-family: var(--font-display);
+    font-size: clamp(1.15rem, 3.2vw, 1.6rem);
+    font-weight: 400;
+    letter-spacing: 0.02em;
+    line-height: 1;
+    color: var(--ink);
+    white-space: nowrap;
+  }
+  .channel-z { position: relative; display: inline-block; }
+  .channel-strike {
     position: absolute;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    height: 2px;
-    background: var(--color-accent);
-    transform: scaleX(0);
-    transform-origin: left;
-    transition: transform var(--dur-fast, 120ms) ease;
+    left: -0.04em; right: -0.04em; top: 40%;
+    width: calc(100% + 0.08em); height: 0.4em;
+    overflow: visible; pointer-events: none;
+    transform: rotate(-2deg);
   }
-  .header-nav a:hover::after,
-  .header-nav a[aria-current='page']::after {
-    transform: scaleX(1);
+  .channel-strike path {
+    fill: none; stroke: var(--accent); stroke-width: 6;
+    stroke-linecap: round; stroke-linejoin: round; vector-effect: non-scaling-stroke;
   }
-  .header-nav a[aria-current='page'] {
-    color: var(--color-accent);
+  .matchday {
+    display: none;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 10.5px;
+    letter-spacing: 0.16em;
+    color: var(--ink-mute);
   }
-  @media (min-width: 768px) {
-    .header-nav { display: inline-flex; align-items: center; }
+  .matchday-clock { color: var(--ink); }
+  .matchday-sep { color: var(--accent); }
+  @media (min-width: 640px) { .matchday { display: inline-flex; } }
+
+  .scorebar-search { margin-left: auto; display: inline-flex; align-items: center; }
+  .scorebar-controls { display: inline-flex; align-items: center; }
+  .scorebar-search + .scorebar-controls { margin-left: 0.5rem; }
+
+  /* ── Row 2 — broadcast ticker ───────────────────────────────────────── */
+  .scorebar-ticker {
+    display: flex;
+    align-items: stretch;
+    background: color-mix(in oklab, var(--pitch-2) 88%, black);
+    border-bottom: 1px solid var(--rule);
+    height: 30px;
+    overflow: hidden;
   }
-  .header-controls-mount {
-    margin-left: auto;
+  .ticker-tag {
     display: inline-flex;
     align-items: center;
+    padding-inline: clamp(0.75rem, 3vw, 1.25rem);
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.2em;
+    color: var(--color-accent-fg);
+    background: var(--accent);
+    flex: 0 0 auto;
   }
-  .header-multisearch {
-    margin-left: auto;
-    display: inline-flex;
+  .ticker-viewport { position: relative; flex: 1 1 auto; overflow: hidden; }
+  .ticker-track {
+    display: flex;
+    width: max-content;
+    height: 100%;
     align-items: center;
   }
-  .header-multisearch + .header-controls-mount {
-    margin-left: 0.75rem;
+  .ticker-run { display: inline-flex; align-items: center; white-space: nowrap; }
+  .ticker-item {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding-inline: 1.1rem;
+    font-family: var(--font-mono);
+    font-size: 12px;
+    letter-spacing: 0.02em;
+    color: var(--ink);
+    text-decoration: none;
+  }
+  .ticker-item:hover { color: var(--accent); }
+  .ticker-bullet { color: var(--accent); }
+  @media (prefers-reduced-motion: no-preference) {
+    .ticker-track { animation: ticker-scroll 40s linear infinite; }
+    .scorebar-ticker:hover .ticker-track { animation-play-state: paused; }
+  }
+  @keyframes ticker-scroll {
+    from { transform: translateX(0); }
+    to { transform: translateX(-50%); }
+  }
+
+  /* ── Channel-guide nav rail ─────────────────────────────────────────── */
+  .guide {
+    background: var(--pitch);
+    border-bottom: 1px solid var(--rule);
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+  .guide::-webkit-scrollbar { display: none; }
+  .guide-inner {
+    max-width: var(--container-page, 1100px);
+    margin-inline: auto;
+    padding-inline: clamp(1rem, 4vw, 2rem);
+    display: flex;
+    gap: 0;
+  }
+  .guide-tab {
+    position: relative;
+    padding: 0.7rem 1.05rem;
+    font-family: var(--font-display);
+    font-size: 15px;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    color: var(--ink-mute);
+    text-decoration: none;
+    white-space: nowrap;
+    border-right: 1px solid var(--rule);
+    transition: color var(--dur-fast, 120ms) ease, background var(--dur-fast, 120ms) ease;
+  }
+  .guide-tab:first-child { border-left: 1px solid var(--rule); }
+  .guide-tab:hover { color: var(--ink); background: color-mix(in oklab, var(--accent) 8%, transparent); }
+  .guide-tab[aria-current='page'] {
+    color: var(--color-accent-fg);
+    background: var(--accent);
+  }
+  .guide-tab:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: -2px;
+  }
+  .channel:focus-visible,
+  .ticker-item:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+    border-radius: 2px;
   }
 </style>

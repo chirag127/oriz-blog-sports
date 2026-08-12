@@ -1,17 +1,20 @@
 ---
-import SeriesSpine from '~/components/SeriesSpine.astro'
 /**
- * /  — oriz-blog homepage ("Signal Press" front page).
+ * /  — SCOREBOARD / BROADCAST rundown (archetype-specific, not the sibling
+ * newspaper-strata front page).
  *
- * Above the fold: a real newspaper masthead — mono dateline (Vol. N · date ·
- * dispatch count), a big Source Serif 4 nameplate, the active-series spine
- * (`●─●─○─○`), and a colour-flagged LEAD STORY. Below: three hairline strata:
- *   1. IN PROGRESS — series spines
- *   2. RECENT      — last 7 posts, each with its vertical desk kicker
- *   3. BY CATEGORY — one typographic row, each desk in its vertical colour
+ * Structure:
+ *   1. MATCH OF THE DAY — a broadcast hero panel for the lead post: giant
+ *      condensed headline, a "VS" scoreline lockup (desk vs matchday), and a
+ *      stats strip (date · reading time · desk).
+ *   2. THE RUNDOWN — recent posts as MATCH CARDS in a broadcast grid. Each
+ *      card carries a header strip (desk badge + date) and a footer stats
+ *      strip (reading time · desk colour bar) — fixture-panel styling.
+ *   3. SEASON STANDINGS — in-progress series as a broadcast standings table
+ *      (played / of / last).
+ *   4. THE DESKS — category chips as a broadcast desk selector.
  *
- * No cover images, no cards, no radius. Verticals (Dev/Finance/Culture/
- * Health/Personal) each carry their own marker colour (--v-*).
+ * Bold condensed type (Anton), broadcast graphics, no magazine card grid.
  */
 import BaseLayout from '~/layouts/BaseLayout.astro'
 import {
@@ -29,75 +32,39 @@ import { SITE_CONFIG } from '~/lib/config'
 
 const allPosts = await getPublishedPosts()
 const lead = allPosts[0]
-const recentPosts = allPosts.slice(1, 8)
+const rundown = allPosts.slice(1, 10)
 
 const seriesAll = await getSeriesWithCounts()
-// In-progress: series where at least one post exists. We model "published"
-// as the count of currently-published parts. Total is exposed as a heuristic
-// (count + a small tail of "drafting" dots) — for v1 of the v2 design, we
-// just use count for total and count for published, and animate the last
-// dot as `current` so the spine has the signature glyph (`⦿`) visible.
-type InProgress = {
-  name: string
-  slug: string
-  total: number
-  published: number
-  current: number
-  latest: Date
-  parts: Awaited<ReturnType<typeof getPostsInSeries>>
-}
-const inProgress: InProgress[] = []
-for (const { series, count } of seriesAll.slice(0, 4)) {
+type Standing = { name: string; slug: string; played: number; total: number; latest: Date }
+const standings: Standing[] = []
+for (const { series, count } of seriesAll.slice(0, 5)) {
   const parts = await getPostsInSeries(series)
-  const latest = parts.reduce(
-    (max, p) => (p.data.pubDate > max ? p.data.pubDate : max),
-    parts[0].data.pubDate,
-  )
-  // Total must never be less than what's already published (otherwise the
-  // label reads "part 29 of 12"). Use the larger of: published count, the
-  // largest explicit `part` field, or published+1 to hint one more coming.
+  const latest = parts.reduce((mx, p) => (p.data.pubDate > mx ? p.data.pubDate : mx), parts[0].data.pubDate)
   const explicitMax = parts.reduce((mx, p) => {
     const v = typeof p.data.part === 'number' ? p.data.part : Number(p.data.part)
     return Number.isFinite(v) ? Math.max(mx, v) : mx
   }, 0)
   const total = Math.max(count, explicitMax, count + 1)
-  inProgress.push({
-    name: series,
-    slug: slugifyTag(series),
-    total,
-    published: count,
-    current: count, // last filled dot is "current"
-    latest,
-    parts,
-  })
+  standings.push({ name: series, slug: slugifyTag(series), played: count, total, latest })
 }
-inProgress.sort((a, b) => b.latest.valueOf() - a.latest.valueOf())
+standings.sort((a, b) => b.latest.valueOf() - a.latest.valueOf())
 
 const cats = await getCategoriesWithCounts()
 
-// Masthead dateline — "VOL. N · <today, long>" — the front-page nameplate.
 const now = new Date()
-const dateline = now.toLocaleDateString('en-GB', {
-  weekday: 'long',
-  day: 'numeric',
-  month: 'long',
-  year: 'numeric',
-})
-const volume = now.getFullYear() - 2018 // notebook began 2019 → Vol. 1
+const season = now.getFullYear() - 2018
 const leadVertical = lead ? postVertical(lead) : 'personal'
 const leadRt = lead ? (lead.data.readingTime ?? readingTimeFor(lead)) : ''
 
-// "Days since" helper for the in-progress rail.
+function iso(d: Date) { return d.toISOString().slice(0, 10) }
 function ago(date: Date): string {
   const days = Math.floor((Date.now() - date.valueOf()) / 86_400_000)
-  if (days < 1) return 'today'
-  if (days === 1) return '1d ago'
-  if (days < 30) return `${days}d ago`
+  if (days < 1) return 'TODAY'
+  if (days === 1) return '1D'
+  if (days < 30) return `${days}D`
   const months = Math.floor(days / 30)
-  if (months === 1) return '1mo ago'
-  if (months < 12) return `${months}mo ago`
-  const years = Math.floor(days / 365)
-  return years === 1 ? '1y ago' : `${years}y ago`
+  if (months < 12) return `${months}MO`
+  return `${Math.floor(days / 365)}Y`
 }
 
 const jsonLd = {
@@ -111,544 +78,440 @@ const jsonLd = {
 ---
 
 <BaseLayout
-  title="The Chalkboard — oriz sports"
+  title="The Chalkboard — matchday feed"
   description={SITE_CONFIG.description}
   jsonLd={jsonLd}
   hideSidebar
 >
-  <div class="container-page">
-    {/* Chalkboard hero — a coach's tactics board is the thesis. */}
-    <section class="board" aria-label="The chalkboard">
-      <svg class="board-motif" viewBox="0 0 400 260" aria-hidden="true" preserveAspectRatio="xMidYMid slice" focusable="false">
-        {/* chalk-drawn half-pitch: touchline box, centre arc, and a play arrow */}
-        <rect x="12" y="12" width="376" height="236" rx="6" class="chalk-line" />
-        <line x1="200" y1="12" x2="200" y2="248" class="chalk-line" />
-        <circle cx="200" cy="130" r="46" class="chalk-line" />
-        <circle cx="200" cy="130" r="3.5" class="chalk-dot" />
-        <rect x="12" y="78" width="66" height="104" rx="2" class="chalk-line" />
-        <rect x="322" y="78" width="66" height="104" rx="2" class="chalk-line" />
-        {/* the play — a dashed run with an arrowhead (the signature stroke) */}
-        <path class="chalk-play" d="M78 200 C 150 170, 150 90, 232 70" />
-        <path class="chalk-arrow" d="M222 62 L236 68 L226 80" />
-        <circle cx="78" cy="200" r="4.5" class="chalk-token" />
-      </svg>
-
-      <div class="board-copy">
-        <p class="board-eyebrow mono">
-          <span class="board-vol">Season {volume}</span>
-          <span aria-hidden="true">·</span>
-          <span>{dateline}</span>
-          <span aria-hidden="true">·</span>
-          <span><span class="count">{allPosts.length}</span> pieces filed</span>
-        </p>
-        <h1 class="board-title">Watch the game<br />like a coach.</h1>
-        <p class="board-sub">Scorecards, tactics, and training — broken down so the next match makes more sense. Written for fans who want to see what's really happening on the pitch.</p>
-        {inProgress[0] && (
-          <p class="board-spine">
-            <span class="board-spine-label mono">Now running</span>
-            <SeriesSpine
-              total={inProgress[0].total}
-              published={inProgress[0].published}
-              current={inProgress[0].current}
-              size="md"
-            />
-            <a class="board-spine-name" href={`/series/${inProgress[0].slug}/`}>{inProgress[0].name}</a>
-          </p>
-        )}
-      </div>
-    </section>
-
+  <div class="broadcast">
+    {/* ── 1 · MATCH OF THE DAY ─────────────────────────────────────────── */}
     {lead && (
-      <>
-        <hr class="rule-heavy" />
-        <section class="lead" data-vertical={leadVertical} aria-labelledby="lead-title">
-          <a class="lead-link" href={`/blog/${lead.id}`}>
-            <span class="lead-kicker mono">
-              <span class="lead-tick" aria-hidden="true"></span>
-              <span class="lead-desk">{verticalLabel(leadVertical)}</span>
-              <span class="lead-flag">Headliner</span>
-            </span>
-            <h2 id="lead-title" class="lead-title">{lead.data.title}</h2>
-            <p class="lead-dek">{lead.data.description}</p>
-            <span class="lead-meta mono">
-              <time datetime={lead.data.pubDate.toISOString()}>{lead.data.pubDate.toISOString().slice(0, 10)}</time>
-              <span aria-hidden="true">·</span>
-              <span>{leadRt}</span>
-            </span>
-          </a>
-        </section>
-      </>
-    )}
-
-    <hr class="hairline" />
-
-    {/* Stratum 1 — IN PROGRESS. */}
-    {inProgress.length > 0 && (
-      <section class="stratum stratum-progress" aria-labelledby="s-progress">
-        <h2 id="s-progress" class="stratum-h mono">In progress</h2>
-        <ul class="progress-list">
-          {inProgress.map((s) => (
-            <li class="progress-row">
-              <a class="progress-link" href={`/series/${s.slug}/`}>
-                <span class="progress-name">{s.name}</span>
-                <span class="progress-meta mono">part {s.published} of {s.total}</span>
-                <span class="progress-spine-mount">
-                  <SeriesSpine
-                    total={s.total}
-                    published={s.published}
-                    current={s.current}
-                    size="md"
-                  />
-                </span>
-                <span class="progress-ago mono">{ago(s.latest)}</span>
-              </a>
-            </li>
-          ))}
-        </ul>
+      <section class="motd" data-vertical={leadVertical} aria-labelledby="motd-title">
+        <div class="motd-strip mono">
+          <span class="motd-badge">MATCH OF THE DAY</span>
+          <span class="motd-season">SEASON {season}</span>
+          <span class="motd-count">{allPosts.length} FILED</span>
+        </div>
+        <a class="motd-link" href={`/blog/${lead.id}`}>
+          <div class="motd-scoreline mono" aria-hidden="true">
+            <span class="motd-side motd-desk">{verticalLabel(leadVertical)}</span>
+            <span class="motd-vs">VS</span>
+            <span class="motd-side motd-date">{iso(lead.data.pubDate)}</span>
+          </div>
+          <h1 id="motd-title" class="motd-title">{lead.data.title}</h1>
+          <p class="motd-dek">{lead.data.description}</p>
+          <div class="statstrip mono">
+            <span class="stat"><span class="stat-k">KICKOFF</span><span class="stat-v">{iso(lead.data.pubDate)}</span></span>
+            <span class="stat"><span class="stat-k">RUNTIME</span><span class="stat-v">{leadRt}</span></span>
+            <span class="stat"><span class="stat-k">DESK</span><span class="stat-v">{verticalLabel(leadVertical)}</span></span>
+            <span class="stat stat-cta"><span class="stat-v">WATCH THE TAPE →</span></span>
+          </div>
+        </a>
       </section>
     )}
 
-    <hr class="hairline" />
-
-    {/* Stratum 2 — RECENT. */}
-    <section class="stratum stratum-recent" aria-labelledby="s-recent">
-      <h2 id="s-recent" class="stratum-h mono">Recent</h2>
-      <ul class="recent-list">
-        {recentPosts.map((p) => (
-          <li class="recent-row" data-vertical={postVertical(p)}>
-            <a class="recent-link" href={`/blog/${p.id}`}>
-              <time class="recent-date mono" datetime={p.data.pubDate.toISOString()}>
-                {p.data.pubDate.toISOString().slice(0, 10)}
-              </time>
-              <span class="recent-meat">
-                <span class="recent-kicker mono">
-                  <span class="recent-tick" aria-hidden="true"></span>{verticalLabel(postVertical(p))}
-                </span>
-                <span class="recent-title">{p.data.title}</span>
-                <span class="recent-dek">{p.data.description}</span>
-              </span>
-              <span class="recent-rt mono">{p.data.readingTime ?? readingTimeFor(p)}</span>
-            </a>
-          </li>
-        ))}
+    {/* ── 2 · THE RUNDOWN — match cards ────────────────────────────────── */}
+    <section class="section" aria-labelledby="rundown-h">
+      <div class="section-head">
+        <h2 id="rundown-h" class="section-h">The rundown</h2>
+        <a class="section-more mono" href="/archive/">FULL SCHEDULE ({allPosts.length}) →</a>
+      </div>
+      <ul class="fixtures">
+        {rundown.map((p, i) => {
+          const v = postVertical(p)
+          return (
+            <li class="fixture" data-vertical={v} style={`--i:${i}`}>
+              <a class="fixture-link" href={`/blog/${p.id}`}>
+                <div class="fixture-top mono">
+                  <span class="fixture-desk">{verticalLabel(v)}</span>
+                  <span class="fixture-date">{iso(p.data.pubDate)}</span>
+                </div>
+                <h3 class="fixture-title">{p.data.title}</h3>
+                <p class="fixture-dek">{p.data.description}</p>
+                <div class="fixture-stats mono">
+                  <span class="fixture-rt">{p.data.readingTime ?? readingTimeFor(p)}</span>
+                  <span class="fixture-ago">{ago(p.data.pubDate)}</span>
+                </div>
+              </a>
+            </li>
+          )
+        })}
       </ul>
-      <p class="all-link">
-        <a href="/archive/">all {allPosts.length} posts in the archive →</a>
-      </p>
     </section>
 
-    <hr class="hairline" />
-
-    {/* Stratum 3 — BY CATEGORY (single typographic row). */}
-    {cats.length > 0 && (
-      <section class="stratum stratum-cats" aria-labelledby="s-cats">
-        <h2 id="s-cats" class="stratum-h mono">By category</h2>
-        <p class="cats-row">
-          {cats.map((c, i) => (
-            <>
-              {i > 0 && <span class="cats-dot" aria-hidden="true">·</span>}
-              <a href={`/categories/${slugifyTag(c.category)}/`} class="cats-link" data-vertical={verticalFor(c.category)}>
-                <span class="cats-name">{c.category}</span>
-                <span class="cats-count mono">({c.count})</span>
-              </a>
-            </>
+    {/* ── 3 · SEASON STANDINGS ─────────────────────────────────────────── */}
+    {standings.length > 0 && (
+      <section class="section" aria-labelledby="standings-h">
+        <div class="section-head">
+          <h2 id="standings-h" class="section-h">Season standings</h2>
+          <a class="section-more mono" href="/series/">ALL SEASONS →</a>
+        </div>
+        <div class="standings" role="table" aria-label="Series standings">
+          <div class="standings-head mono" role="row">
+            <span role="columnheader">Series</span>
+            <span role="columnheader" class="col-num">Played</span>
+            <span role="columnheader" class="col-num">Of</span>
+            <span role="columnheader" class="col-num">Last</span>
+          </div>
+          {standings.map((s, i) => (
+            <a class="standings-row" href={`/series/${s.slug}/`} role="row" style={`--i:${i}`}>
+              <span class="std-rank mono" role="cell">{String(i + 1).padStart(2, '0')}</span>
+              <span class="std-name" role="cell">{s.name}</span>
+              <span class="std-played mono" role="cell">{s.played}</span>
+              <span class="std-total mono" role="cell">{s.total}</span>
+              <span class="std-last mono" role="cell">{ago(s.latest)}</span>
+            </a>
           ))}
-        </p>
+        </div>
+      </section>
+    )}
+
+    {/* ── 4 · THE DESKS ────────────────────────────────────────────────── */}
+    {cats.length > 0 && (
+      <section class="section" aria-labelledby="desks-h">
+        <div class="section-head">
+          <h2 id="desks-h" class="section-h">The desks</h2>
+        </div>
+        <div class="desks">
+          {cats.map((c) => (
+            <a class="desk" href={`/categories/${slugifyTag(c.category)}/`} data-vertical={verticalFor(c.category)}>
+              <span class="desk-name">{c.category}</span>
+              <span class="desk-count mono">{c.count}</span>
+            </a>
+          ))}
+        </div>
       </section>
     )}
   </div>
 </BaseLayout>
 
 <style>
-  .container-page {
-    max-width: 920px;
+  .broadcast {
+    max-width: var(--container-page, 1100px);
     margin-inline: auto;
-    padding-inline: clamp(1.25rem, 4vw, 2rem);
+    padding: clamp(1.25rem, 4vw, 2.5rem) clamp(1rem, 4vw, 2rem) 3rem;
   }
 
-  /* -- Chalkboard hero (the thesis) ----------------------------------- */
+  /* desk-colour var routing (shared by motd + fixtures + desks) */
+  [data-vertical='dev'] { --v: var(--v-dev); }
+  [data-vertical='finance'] { --v: var(--v-finance); }
+  [data-vertical='culture'] { --v: var(--v-culture); }
+  [data-vertical='health'] { --v: var(--v-health); }
+  [data-vertical='personal'] { --v: var(--v-personal); }
 
-  .board {
-    position: relative;
-    margin-top: clamp(1.25rem, 4vw, 2.25rem);
-    padding: clamp(1.75rem, 5vw, 3rem) clamp(1.5rem, 4vw, 2.75rem);
+  /* ── 1 · MATCH OF THE DAY ─────────────────────────────────────────── */
+  .motd {
+    --v: var(--v-personal);
     border: 1px solid var(--rule-strong);
+    border-top: 4px solid var(--accent);
     border-radius: var(--radius-card);
     background:
-      radial-gradient(120% 140% at 15% 0%, color-mix(in oklab, var(--accent) 8%, transparent), transparent 55%),
-      var(--paper-2);
+      radial-gradient(130% 120% at 85% 0%, color-mix(in oklab, var(--accent) 10%, transparent), transparent 60%),
+      var(--pitch-2);
     overflow: hidden;
-    isolation: isolate;
   }
-  /* the chalk tactics drawing — the signature element */
-  .board-motif {
-    position: absolute;
-    inset: 0;
-    width: 100%;
-    height: 100%;
-    z-index: -1;
-    opacity: 0.5;
-    color: var(--rule-strong);
-  }
-  .chalk-line {
-    fill: none;
-    stroke: currentColor;
-    stroke-width: 1.4;
-    stroke-linecap: round;
-  }
-  .chalk-dot { fill: currentColor; }
-  .chalk-token { fill: var(--accent); }
-  .chalk-play {
-    fill: none;
-    stroke: var(--accent);
-    stroke-width: 2.2;
-    stroke-linecap: round;
-    stroke-dasharray: 7 7;
-  }
-  .chalk-arrow {
-    fill: none;
-    stroke: var(--accent);
-    stroke-width: 2.2;
-    stroke-linecap: round;
-    stroke-linejoin: round;
-  }
-  @media (prefers-reduced-motion: no-preference) {
-    .chalk-play {
-      stroke-dasharray: 320;
-      stroke-dashoffset: 320;
-      animation: chalk-draw 1.5s var(--ease-out) 0.2s forwards;
-    }
-  }
-  @keyframes chalk-draw {
-    to { stroke-dashoffset: 0; }
-  }
-
-  .board-copy { max-width: 40ch; }
-  .board-eyebrow {
+  .motd-strip {
     display: flex;
-    flex-wrap: wrap;
     align-items: center;
-    gap: 0.5rem;
-    font-size: 11px;
-    letter-spacing: 0.12em;
-    text-transform: uppercase;
+    gap: 0.75rem;
+    padding: 0.55rem clamp(1rem, 3vw, 1.75rem);
+    font-size: 10.5px;
+    letter-spacing: 0.16em;
     color: var(--ink-mute);
-    margin: 0 0 1.25rem;
+    border-bottom: 1px solid var(--rule);
+    background: color-mix(in oklab, var(--pitch) 55%, transparent);
   }
-  .board-vol { color: var(--accent); font-weight: 700; }
-  .board-eyebrow .count { color: var(--ink); }
-  .board-title {
+  .motd-badge {
+    color: var(--color-accent-fg);
+    background: var(--accent);
+    padding: 0.2rem 0.5rem;
+    font-weight: 700;
+    border-radius: 2px;
+  }
+  .motd-count { margin-left: auto; }
+  .motd-link {
+    display: block;
+    padding: clamp(1.25rem, 4vw, 2.25rem) clamp(1rem, 3vw, 1.75rem) clamp(1rem, 3vw, 1.5rem);
+    color: var(--ink);
+    text-decoration: none;
+  }
+  .motd-scoreline {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.75rem;
+    font-size: 12px;
+    letter-spacing: 0.14em;
+    margin-bottom: 0.9rem;
+  }
+  .motd-desk { color: var(--v); font-weight: 700; }
+  .motd-vs {
+    color: var(--color-accent-fg);
+    background: var(--accent);
+    padding: 0.1rem 0.4rem;
+    font-weight: 700;
+    border-radius: 2px;
+  }
+  .motd-date { color: var(--ink-mute); }
+  .motd-title {
     font-family: var(--font-display);
     font-weight: 400;
-    font-size: clamp(2.75rem, 9vw, 5.25rem);
+    font-size: clamp(2.4rem, 8vw, 5rem);
     line-height: 0.9;
     letter-spacing: 0.01em;
     text-transform: uppercase;
-    color: var(--ink);
     margin: 0;
+    max-width: 18ch;
   }
-  .board-sub {
+  .motd-link:hover .motd-title { color: var(--accent); }
+  .motd-dek {
     font-family: var(--font-body);
-    font-size: clamp(1.0625rem, 2vw, 1.25rem);
+    font-size: clamp(1rem, 2vw, 1.2rem);
     font-weight: 500;
     line-height: 1.5;
     color: var(--ink-mute);
-    margin: 1.125rem 0 0;
-    max-width: 54ch;
+    margin: 1rem 0 0;
+    max-width: 62ch;
   }
-  .board-spine {
+  .statstrip {
     display: flex;
     flex-wrap: wrap;
-    align-items: center;
-    gap: 0.625rem;
-    margin: 1.75rem 0 0;
+    gap: 0;
+    margin-top: 1.5rem;
+    border: 1px solid var(--rule);
+    border-radius: 4px;
+    overflow: hidden;
   }
-  .board-spine-label {
-    font-size: 10px;
-    letter-spacing: 0.18em;
-    text-transform: uppercase;
-    color: var(--ink-mute);
+  .stat {
+    display: flex;
+    flex-direction: column;
+    gap: 0.15rem;
+    padding: 0.55rem 0.9rem;
+    border-right: 1px solid var(--rule);
+    flex: 1 1 auto;
   }
-  .board-spine-name {
-    font-family: var(--font-mono);
-    font-size: 0.9375rem;
-    font-weight: 700;
-    color: var(--ink);
-    text-decoration: none;
+  .stat:last-child { border-right: 0; }
+  .stat-k { font-size: 9.5px; letter-spacing: 0.16em; color: var(--ink-mute); }
+  .stat-v { font-size: 13px; font-weight: 700; color: var(--ink); }
+  .stat-cta { flex: 0 0 auto; justify-content: center; background: color-mix(in oklab, var(--accent) 12%, transparent); }
+  .stat-cta .stat-v { color: var(--accent); }
+  .motd-link:hover .stat-cta { background: var(--accent); }
+  .motd-link:hover .stat-cta .stat-v { color: var(--color-accent-fg); }
+
+  /* ── section chrome ───────────────────────────────────────────────── */
+  .section { margin-top: clamp(2.5rem, 6vw, 4rem); }
+  .section-head {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 1rem;
+    padding-bottom: 0.75rem;
+    margin-bottom: 1.25rem;
     border-bottom: 2px solid var(--rule-strong);
   }
-  .board-spine-name:hover { color: var(--accent); border-bottom-color: var(--accent); }
-
-  .rule-heavy {
-    height: 3px;
-    background: var(--accent);
-    border: 0;
-    margin: 2rem 0 0;
-  }
-
-  /* ── Lead story ────────────────────────────────────────────────────── */
-
-  .lead {
-    --v: var(--v-personal);
-    padding-block: 1.75rem 0.5rem;
-  }
-  .lead[data-vertical='dev'] { --v: var(--v-dev); }
-  .lead[data-vertical='finance'] { --v: var(--v-finance); }
-  .lead[data-vertical='culture'] { --v: var(--v-culture); }
-  .lead[data-vertical='health'] { --v: var(--v-health); }
-  .lead-link { display: grid; gap: 0.625rem; color: var(--ink); text-decoration: none; }
-  .lead-kicker {
-    display: inline-flex; align-items: center; gap: 0.5rem;
-    font-size: 11px; letter-spacing: 0.16em; text-transform: uppercase; color: var(--ink-mute);
-  }
-  .lead-tick { width: 8px; height: 8px; background: var(--v); flex: 0 0 auto; }
-  .lead-desk { color: var(--v); font-weight: 500; }
-  .lead-flag { border-left: 1px solid var(--rule); padding-left: 0.5rem; color: var(--accent); }
-  .lead-title {
+  .section-h {
     font-family: var(--font-display);
-    font-size: clamp(2rem, 5vw, 3rem);
     font-weight: 400;
-    letter-spacing: 0.01em;
+    font-size: clamp(1.5rem, 4vw, 2.25rem);
+    line-height: 1;
+    letter-spacing: 0.02em;
     text-transform: uppercase;
-    line-height: 0.98;
     margin: 0;
-    max-width: 20ch;
+    color: var(--ink);
   }
-  .lead-link:hover .lead-title { color: var(--accent); }
-  .lead-dek {
-    font-family: var(--font-body);
-    font-size: 1.125rem;
-    font-weight: 500;
-    line-height: 1.5;
-    color: var(--ink-mute);
-    margin: 0;
-    max-width: 58ch;
-  }
-  .lead-meta { display: inline-flex; gap: 0.5rem; font-size: 11px; letter-spacing: 0.06em; color: var(--ink-mute); }
-
-  /* ── Strata ────────────────────────────────────────────────────────── */
-
-  .stratum { padding-block: 1.75rem 1.75rem; }
-  .stratum-h {
-    font-family: var(--font-mono);
+  .section-more {
     font-size: 11px;
-    text-transform: uppercase;
-    letter-spacing: 0.18em;
+    letter-spacing: 0.1em;
     color: var(--ink-mute);
-    font-weight: 500;
-    margin: 0 0 1.25rem;
-  }
-
-  /* ── In progress ──────────────────────────────────────────────────── */
-
-  .progress-list {
-    list-style: none;
-    padding: 0;
-    margin: 0;
-    display: flex;
-    flex-direction: column;
-    gap: 0.625rem;
-  }
-  .progress-row { padding: 0; }
-  .progress-link {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) auto auto auto;
-    gap: 1rem;
-    align-items: baseline;
-    color: var(--ink);
     text-decoration: none;
-    padding-block: 0.5rem;
-  }
-  .progress-link:hover { color: var(--accent); }
-  .progress-link:hover .progress-meta,
-  .progress-link:hover .progress-ago { color: var(--accent); }
-  .progress-name {
-    font-family: var(--font-body);
-    font-size: 1.0625rem;
-    font-weight: 700;
-    letter-spacing: -0.01em;
-    color: var(--ink);
-    overflow: hidden;
-    text-overflow: ellipsis;
     white-space: nowrap;
   }
-  .progress-meta, .progress-ago {
-    font-family: var(--font-mono);
-    font-size: 11px;
-    letter-spacing: 0.06em;
-    color: var(--ink-mute);
-  }
-  .progress-spine-mount { display: inline-flex; }
+  .section-more:hover { color: var(--accent); }
 
-  @media (max-width: 640px) {
-    .progress-link {
-      grid-template-columns: minmax(0, 1fr) auto;
-      grid-template-areas:
-        'name      ago'
-        'meta      meta'
-        'spine     spine';
-      row-gap: 0.25rem;
-    }
-    .progress-name { grid-area: name; }
-    .progress-meta { grid-area: meta; }
-    .progress-spine-mount { grid-area: spine; }
-    .progress-ago { grid-area: ago; text-align: right; }
-  }
-
-  /* ── Recent ───────────────────────────────────────────────────────── */
-
-  .recent-list {
+  /* ── 2 · fixtures / match cards ───────────────────────────────────── */
+  .fixtures {
     list-style: none;
-    padding: 0;
     margin: 0;
+    padding: 0;
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 1rem;
+  }
+  .fixture {
+    --v: var(--v-personal);
+    border: 1px solid var(--rule);
+    border-left: 3px solid var(--v);
+    border-radius: var(--radius-card);
+    background: var(--pitch-2);
+    overflow: hidden;
+    transition: transform var(--dur-fast, 120ms) var(--ease-out), border-color var(--dur-fast, 120ms) ease;
+  }
+  .fixture:hover { transform: translateY(-3px); border-color: var(--rule-strong); }
+  .fixture:hover { border-left-color: var(--accent); }
+  .fixture-link {
     display: flex;
     flex-direction: column;
-  }
-  .recent-row {
-    --v: var(--v-personal);
-    border-bottom: 1px solid color-mix(in oklab, var(--rule) 70%, transparent);
-  }
-  .recent-row[data-vertical='dev'] { --v: var(--v-dev); }
-  .recent-row[data-vertical='finance'] { --v: var(--v-finance); }
-  .recent-row[data-vertical='culture'] { --v: var(--v-culture); }
-  .recent-row[data-vertical='health'] { --v: var(--v-health); }
-  .recent-row:last-child { border-bottom: 0; }
-  .recent-link {
-    display: grid;
-    grid-template-columns: 100px minmax(0, 1fr) auto;
-    gap: 1.25rem;
-    align-items: baseline;
+    height: 100%;
+    padding: 1rem 1.1rem 0;
     color: var(--ink);
     text-decoration: none;
-    padding-block: 0.875rem;
-    padding-left: 0.75rem;
-    margin-left: -0.75rem;
-    border-left: 2px solid transparent;
-    transition: border-color var(--dur-fast, 120ms) ease;
   }
-  .recent-link:hover { border-left-color: var(--v); }
-  .recent-link:hover .recent-title { color: var(--accent); }
-  .recent-link:hover .recent-date,
-  .recent-link:hover .recent-rt { color: var(--accent); }
-
-  .recent-kicker {
-    display: inline-flex;
+  .fixture-top {
+    display: flex;
     align-items: center;
-    gap: 0.375rem;
+    justify-content: space-between;
+    gap: 0.75rem;
     font-size: 10px;
     letter-spacing: 0.14em;
+    margin-bottom: 0.75rem;
+  }
+  .fixture-desk { color: var(--v); font-weight: 700; }
+  .fixture-date { color: var(--ink-mute); }
+  .fixture-title {
+    font-family: var(--font-display);
+    font-weight: 400;
+    font-size: 1.5rem;
+    line-height: 0.98;
+    letter-spacing: 0.01em;
     text-transform: uppercase;
-    color: var(--v);
-    font-weight: 500;
-  }
-  .recent-tick { width: 6px; height: 6px; background: var(--v); flex: 0 0 auto; }
-
-  .recent-date {
-    color: var(--ink-mute);
-    font-family: var(--font-mono);
-    font-size: 12px;
-    letter-spacing: 0.04em;
-    position: relative;
-    padding-left: 0.875rem;
-  }
-  /* dateline gutter: coral tick marks the wire-feed timestamp */
-  .recent-date::before {
-    content: '';
-    position: absolute;
-    left: 0;
-    top: 0.12em;
-    width: 3px;
-    height: 0.7em;
-    background: var(--cobalt);
-  }
-  .recent-meat {
-    display: flex;
-    flex-direction: column;
-    gap: 0.125rem;
-    min-width: 0;
-  }
-  .recent-title {
-    font-family: var(--font-body);
-    font-size: 1.125rem;
-    font-weight: 700;
-    letter-spacing: -0.01em;
+    margin: 0;
     color: var(--ink);
-    line-height: 1.3;
   }
-  .recent-dek {
+  .fixture-link:hover .fixture-title { color: var(--accent); }
+  .fixture-dek {
     font-family: var(--font-body);
-    font-size: 14.5px;
-    color: var(--ink-mute);
+    font-size: 13.5px;
     line-height: 1.5;
+    color: var(--ink-mute);
+    margin: 0.6rem 0 0;
     display: -webkit-box;
     -webkit-box-orient: vertical;
     -webkit-line-clamp: 2;
     line-clamp: 2;
     overflow: hidden;
   }
-  .recent-rt {
-    color: var(--ink-mute);
-    font-family: var(--font-mono);
+  .fixture-stats {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    margin-top: auto;
+    padding: 0.6rem 0;
+    padding-top: 0.85rem;
+    border-top: 1px solid var(--rule);
     font-size: 11px;
-    letter-spacing: 0.04em;
-    white-space: nowrap;
-  }
-
-  @media (max-width: 640px) {
-    .recent-link {
-      grid-template-columns: minmax(0, 1fr) auto;
-      grid-template-areas:
-        'date   rt'
-        'meat   meat';
-      row-gap: 0.25rem;
-    }
-    .recent-date { grid-area: date; }
-    .recent-rt { grid-area: rt; text-align: right; }
-    .recent-meat { grid-area: meat; }
-  }
-
-  .all-link {
-    margin: 1.25rem 0 0;
-    font-family: var(--font-sans);
-    font-size: 13.6px;
-  }
-  .all-link a {
+    letter-spacing: 0.06em;
     color: var(--ink-mute);
-    text-decoration: underline;
-    text-underline-offset: 3px;
-    text-decoration-color: var(--rule);
   }
-  .all-link a:hover { color: var(--accent); text-decoration-color: var(--accent); }
-
-  /* ── By category (one row) ────────────────────────────────────────── */
-
-  .cats-row {
-    margin: 0;
-    line-height: 2;
-    color: var(--ink);
+  .fixture-rt { color: var(--ink); font-weight: 700; }
+  .fixture-ago {
+    color: var(--v);
+    border: 1px solid color-mix(in oklab, var(--v) 40%, transparent);
+    border-radius: 2px;
+    padding: 0.1rem 0.35rem;
+    font-weight: 700;
   }
-  .cats-link {
-    --v: var(--v-personal);
+
+  /* ── 3 · standings ────────────────────────────────────────────────── */
+  .standings {
+    border: 1px solid var(--rule);
+    border-radius: var(--radius-card);
+    overflow: hidden;
+  }
+  .standings-head {
+    display: grid;
+    grid-template-columns: 2.5rem minmax(0, 1fr) 4rem 4rem;
+    gap: 0.5rem;
+    padding: 0.55rem 1rem;
+    font-size: 10px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--ink-mute);
+    background: color-mix(in oklab, var(--pitch) 60%, transparent);
+    border-bottom: 1px solid var(--rule);
+  }
+  .standings-head span:first-child { grid-column: 1 / 3; }
+  .col-num { text-align: right; }
+  .standings-row {
+    display: grid;
+    grid-template-columns: 2.5rem minmax(0, 1fr) 4rem 4rem 4rem;
+    gap: 0.5rem;
+    align-items: center;
+    padding: 0.75rem 1rem;
     color: var(--ink);
     text-decoration: none;
-    margin-inline: 0.125rem;
+    border-bottom: 1px solid var(--rule);
   }
-  .cats-link[data-vertical='dev'] { --v: var(--v-dev); }
-  .cats-link[data-vertical='finance'] { --v: var(--v-finance); }
-  .cats-link[data-vertical='culture'] { --v: var(--v-culture); }
-  .cats-link[data-vertical='health'] { --v: var(--v-health); }
-  .cats-link:hover .cats-name { color: var(--v); }
-  .cats-name {
-    font-family: var(--font-body);
-    font-size: 17px;
-    font-weight: 700;
-    letter-spacing: -0.01em;
+  .standings-row:last-child { border-bottom: 0; }
+  .standings-row:hover { background: color-mix(in oklab, var(--accent) 8%, transparent); }
+  .std-rank { color: var(--accent); font-weight: 700; font-size: 13px; }
+  .std-name {
+    font-family: var(--font-display);
+    font-size: 1.15rem;
+    letter-spacing: 0.01em;
+    text-transform: uppercase;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
-  .cats-count {
-    color: var(--ink-mute);
-    font-family: var(--font-mono);
+  .standings-row:hover .std-name { color: var(--accent); }
+  .std-played, .std-total, .std-last { text-align: right; font-size: 13px; color: var(--ink); }
+  .std-total { color: var(--ink-mute); }
+  .std-last { color: var(--ink-mute); }
+
+  @media (max-width: 560px) {
+    .standings-head { grid-template-columns: minmax(0, 1fr) 3rem 3rem; }
+    .standings-head span:first-child { grid-column: 1; }
+    .standings-row { grid-template-columns: 2rem minmax(0, 1fr) 3rem 3rem; }
+    .std-total { display: none; }
+    .standings-head span:nth-child(3) { display: none; }
+  }
+
+  /* ── 4 · desks ────────────────────────────────────────────────────── */
+  .desks {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.6rem;
+  }
+  .desk {
+    --v: var(--v-personal);
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.5rem 0.85rem;
+    border: 1px solid var(--rule);
+    border-radius: 4px;
+    background: var(--pitch-2);
+    color: var(--ink);
+    text-decoration: none;
+  }
+  .desk:hover { border-color: var(--v); background: color-mix(in oklab, var(--v) 12%, var(--pitch-2)); }
+  .desk-name {
+    font-family: var(--font-display);
+    font-size: 1.05rem;
+    letter-spacing: 0.02em;
+    text-transform: uppercase;
+  }
+  .desk-count {
     font-size: 11px;
-    margin-left: 0.25rem;
+    font-weight: 700;
+    color: var(--v);
+    background: color-mix(in oklab, var(--v) 15%, transparent);
+    padding: 0.05rem 0.35rem;
+    border-radius: 2px;
   }
-  .cats-dot { color: var(--rule); margin-inline: 0.625rem; }
+
+  /* focus */
+  .motd-link:focus-visible,
+  .fixture-link:focus-visible,
+  .standings-row:focus-visible,
+  .desk:focus-visible,
+  .section-more:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .fixture { transition: none; }
+    .fixture:hover { transform: none; }
+  }
 </style>
