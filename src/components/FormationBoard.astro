@@ -1,0 +1,276 @@
+---
+/**
+ * FormationBoard — The Chalkboard's signature module.
+ *
+ * A tactical formation display: posts arrayed on a pitch diagram like
+ * player positions (4-3-3 or 4-4-2 depending on count), each "player"
+ * node showing a post thumbnail/title. Drawn as an SVG pitch overlay
+ * with CSS-positioned post nodes on top.
+ *
+ * Pure CSS / Astro — no JS required. Positions computed at build time.
+ * Reduced-motion safe (no animations if prefers-reduced-motion).
+ */
+import type { BlogPost } from '~/lib/blog'
+import { postVertical, readingTimeFor, verticalLabel } from '~/lib/blog'
+
+interface Props {
+  posts: BlogPost[]
+}
+
+const { posts } = Astro.props
+
+// Formation layouts: [row, col] grid of positions (0-indexed)
+// 4-2-3-1 formation for 10 posts, 4-3-3 for 9, 4-4-2 for 10
+// Each entry: { row, col, rowMax, label }
+function buildFormation(count: number): Array<{ row: number; col: number; rowMax: number; label: string }> {
+  const formations: Array<Array<{ label: string; count: number }>> = [
+    // rows from front (attack) to back (keeper)
+    [{ label: 'ST', count: 1 }],
+    [{ label: 'CAM', count: 3 }],
+    [{ label: 'CM', count: 2 }],
+    [{ label: 'DEF', count: 4 }],
+  ]
+  const positions: Array<{ row: number; col: number; rowMax: number; label: string }> = []
+  let i = 0
+  for (let r = 0; r < formations.length; r++) {
+    const rowDef = formations[r]
+    const rowMax = rowDef[0].count
+    for (let c = 0; c < rowMax; c++) {
+      if (i >= count) break
+      positions.push({ row: r, col: c, rowMax, label: rowDef[0].label })
+      i++
+    }
+    if (i >= count) break
+  }
+  return positions
+}
+
+const sliced = posts.slice(0, 10)
+const positions = buildFormation(sliced.length)
+
+function pct(col: number, rowMax: number): string {
+  if (rowMax === 1) return '50%'
+  const step = 100 / (rowMax + 1)
+  return `${step * (col + 1)}%`
+}
+
+const rowYPct = [18, 38, 60, 80] // % from top (attack → defence)
+---
+
+<section class="fb" aria-labelledby="fb-title">
+  <div class="fb-head">
+    <h2 id="fb-title" class="fb-title mono">FORMATION BOARD</h2>
+    <p class="fb-sub mono">10 posts in play · 4-2-3-1</p>
+  </div>
+
+  <div class="fb-pitch" role="list" aria-label="Posts in formation">
+    {/* SVG pitch markings */}
+    <svg class="fb-svg" viewBox="0 0 400 300" aria-hidden="true" focusable="false" preserveAspectRatio="xMidYMid meet">
+      {/* Pitch outline */}
+      <rect x="6" y="6" width="388" height="288" rx="4" fill="none" stroke="var(--pitch-line)" stroke-width="1.5" />
+      {/* Centre line */}
+      <line x1="6" y1="153" x2="394" y2="153" stroke="var(--pitch-line)" stroke-width="1" />
+      {/* Centre circle */}
+      <circle cx="200" cy="153" r="36" fill="none" stroke="var(--pitch-line)" stroke-width="1" />
+      <circle cx="200" cy="153" r="3" fill="var(--pitch-line)" />
+      {/* Goal areas */}
+      <rect x="138" y="6" width="124" height="34" rx="2" fill="none" stroke="var(--pitch-line)" stroke-width="1" />
+      <rect x="138" y="260" width="124" height="34" rx="2" fill="none" stroke="var(--pitch-line)" stroke-width="1" />
+      {/* Penalty spots */}
+      <circle cx="200" cy="56" r="2.5" fill="var(--pitch-line)" />
+      <circle cx="200" cy="248" r="2.5" fill="var(--pitch-line)" />
+      {/* Corner arcs */}
+      <path d="M6 26 A20 20 0 0 1 26 6" fill="none" stroke="var(--pitch-line)" stroke-width="1" />
+      <path d="M374 6 A20 20 0 0 1 394 26" fill="none" stroke="var(--pitch-line)" stroke-width="1" />
+      <path d="M394 274 A20 20 0 0 1 374 294" fill="none" stroke="var(--pitch-line)" stroke-width="1" />
+      <path d="M26 294 A20 20 0 0 1 6 274" fill="none" stroke="var(--pitch-line)" stroke-width="1" />
+    </svg>
+
+    {/* Post nodes positioned on pitch */}
+    {sliced.map((post, i) => {
+      const pos = positions[i]
+      if (!pos) return null
+      const v = postVertical(post)
+      const x = pct(pos.col, pos.rowMax)
+      const y = `${rowYPct[pos.row] ?? 50}%`
+      return (
+        <a
+          class="fb-node"
+          href={`/blog/${post.id}`}
+          data-vertical={v}
+          style={`left:${x};top:${y}`}
+          role="listitem"
+          aria-label={`${pos.label}: ${post.data.title}`}
+        >
+          <span class="fb-node-pos mono" aria-hidden="true">{pos.label}</span>
+          <span class="fb-node-title">{post.data.title}</span>
+          <span class="fb-node-rt mono" aria-hidden="true">{post.data.readingTime ?? readingTimeFor(post)}</span>
+          <span class="fb-node-v mono" aria-hidden="true">{verticalLabel(v)}</span>
+        </a>
+      )
+    })}
+  </div>
+</section>
+
+<style>
+  .fb {
+    --pitch-line: color-mix(in oklab, var(--rule-strong) 60%, transparent);
+    margin-top: clamp(2.5rem, 6vw, 4rem);
+  }
+
+  .fb-head {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 1rem;
+    padding-bottom: 0.75rem;
+    margin-bottom: 1.25rem;
+    border-bottom: 2px solid var(--rule-strong);
+  }
+
+  .fb-title {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: var(--accent);
+    margin: 0;
+  }
+
+  .fb-sub {
+    font-size: 10px;
+    letter-spacing: 0.12em;
+    color: var(--ink-mute);
+    margin: 0;
+  }
+
+  .fb-pitch {
+    position: relative;
+    width: 100%;
+    aspect-ratio: 4 / 3;
+    background: color-mix(in oklab, var(--pitch-2) 80%, black);
+    border: 1px solid var(--rule);
+    border-radius: var(--radius-card);
+    overflow: hidden;
+  }
+
+  .fb-svg {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    opacity: 0.35;
+    pointer-events: none;
+  }
+
+  /* Player nodes */
+  .fb-node {
+    position: absolute;
+    transform: translate(-50%, -50%);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2px;
+    text-decoration: none;
+    color: var(--ink);
+    z-index: 2;
+    max-width: 90px;
+  }
+
+  .fb-node-pos {
+    font-size: 8px;
+    font-weight: 700;
+    letter-spacing: 0.14em;
+    color: var(--color-accent-fg);
+    background: var(--accent);
+    padding: 1px 5px;
+    border-radius: 2px;
+    white-space: nowrap;
+  }
+
+  [data-vertical='dev'] .fb-node-pos    { background: var(--v-dev); }
+  [data-vertical='finance'] .fb-node-pos { background: var(--v-finance); color: #0c1a15; }
+  [data-vertical='culture'] .fb-node-pos { background: var(--v-culture); color: #0c1a15; }
+  [data-vertical='health'] .fb-node-pos  { background: var(--v-health); }
+  [data-vertical='personal'] .fb-node-pos { background: var(--ink-mute); color: var(--pitch); }
+
+  .fb-node-title {
+    font-family: var(--font-display);
+    font-size: 10px;
+    font-weight: 400;
+    letter-spacing: 0.02em;
+    text-transform: uppercase;
+    text-align: center;
+    line-height: 1.15;
+    color: var(--ink);
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
+    overflow: hidden;
+    max-width: 84px;
+  }
+
+  .fb-node-rt,
+  .fb-node-v {
+    font-size: 8px;
+    letter-spacing: 0.1em;
+    color: var(--ink-mute);
+  }
+
+  .fb-node-v { display: none; }
+
+  /* Hover: expand the node into a small tooltip-card */
+  .fb-node::before {
+    content: '';
+    position: absolute;
+    inset: -10px;
+    background: color-mix(in oklab, var(--pitch-2) 96%, transparent);
+    border: 1px solid var(--rule-strong);
+    border-radius: 6px;
+    opacity: 0;
+    z-index: -1;
+    transition: opacity var(--dur-fast, 120ms) ease;
+  }
+
+  .fb-node:hover::before { opacity: 1; }
+  .fb-node:hover .fb-node-title { color: var(--accent); }
+  .fb-node:hover .fb-node-v { display: block; }
+
+  .fb-node:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 4px;
+    border-radius: 4px;
+  }
+
+  /* Responsive — on small screens show a simpler list fallback */
+  @media (max-width: 560px) {
+    .fb-pitch {
+      aspect-ratio: unset;
+      height: auto;
+      background: transparent;
+      border: none;
+      border-radius: 0;
+      overflow: visible;
+    }
+    .fb-svg { display: none; }
+    .fb-node {
+      position: static;
+      transform: none;
+      flex-direction: row;
+      max-width: 100%;
+      padding: 0.55rem 0;
+      border-bottom: 1px solid var(--rule);
+      gap: 0.6rem;
+    }
+    .fb-node::before { display: none; }
+    .fb-node-title { font-size: 13px; text-align: left; display: block; -webkit-line-clamp: unset; }
+    .fb-node-rt { display: block; }
+    .fb-node-v { display: none; }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .fb-node::before { transition: none; }
+  }
+</style>

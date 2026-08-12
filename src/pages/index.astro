@@ -16,6 +16,7 @@
  *
  * Bold condensed type (Anton), broadcast graphics, no magazine card grid.
  */
+import FormationBoard from '~/components/FormationBoard.astro'
 import BaseLayout from '~/layouts/BaseLayout.astro'
 import {
   getCategoriesWithCounts,
@@ -138,6 +139,9 @@ const jsonLd = {
         })}
       </ul>
     </section>
+
+    {/* ── 2.5 · FORMATION BOARD — signature module ────────────────────── */}
+    {allPosts.length > 0 && <FormationBoard posts={allPosts.slice(0, 10)} />}
 
     {/* ── 3 · SEASON STANDINGS ─────────────────────────────────────────── */}
     {standings.length > 0 && (
